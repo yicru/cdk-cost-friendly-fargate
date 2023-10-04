@@ -1,7 +1,7 @@
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as ecr from "aws-cdk-lib/aws-ecr";
-import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
+import * as ecsPatterns from "aws-cdk-lib/aws-ecs-patterns";
 import * as cdk from "aws-cdk-lib";
 import * as ecrdeploy from "cdk-ecr-deployment";
 import { DockerImageAsset, Platform } from "aws-cdk-lib/aws-ecr-assets";
@@ -40,43 +40,19 @@ export class CdkCostFriendlyFargateStack extends cdk.Stack {
       vpc,
     });
 
-    const taskDefinition = new ecs.FargateTaskDefinition(this, "Task", {
-      cpu: 256,
-      memoryLimitMiB: 512,
-    });
-
-    const container = taskDefinition.addContainer("Container", {
-      image: ecs.ContainerImage.fromEcrRepository(repository),
-    });
-
-    container.addPortMappings({
-      containerPort: 80,
-    });
-
-    const service = new ecs.FargateService(this, "FargateService", {
-      cluster,
-      taskDefinition,
-      desiredCount: 1,
-      securityGroups: [],
-      assignPublicIp: true,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PUBLIC,
+    new ecsPatterns.ApplicationLoadBalancedFargateService(
+      this,
+      "FargateService",
+      {
+        cluster,
+        taskImageOptions: {
+          image: ecs.ContainerImage.fromEcrRepository(repository, 'latest'),
+          containerPort: 80,
+        },
+        desiredCount: 1,
+        publicLoadBalancer: true,
+        assignPublicIp: true,
       },
-    });
-
-    const alb = new elbv2.ApplicationLoadBalancer(this, "LoadBalancer", {
-      vpc,
-      internetFacing: true,
-    });
-
-    const listener = alb.addListener("Listener", {
-      port: 80,
-      open: true,
-    });
-
-    listener.addTargets("ECS", {
-      port: 80,
-      targets: [service],
-    });
+    );
   }
 }
